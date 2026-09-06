@@ -8,7 +8,9 @@ import {
   buildDayReportPayload,
   DAY_REPORT_SYSTEM_PROMPT,
   generateDayReport,
-  getDayBounds
+  getDayBounds,
+  getCoverageFromPayload,
+  previewDayReport
 } from './report'
 import type { RawCapture } from '../../shared/types'
 
@@ -80,6 +82,75 @@ describe('buildDayReportPayload', () => {
   })
 })
 
+describe('DAY_REPORT_SYSTEM_PROMPT', () => {
+  it('forbids comparisons because no baselines are provided', () => {
+    expect(DAY_REPORT_SYSTEM_PROMPT).toContain('禁止')
+    expect(DAY_REPORT_SYSTEM_PROMPT).toContain('比较性')
+    expect(DAY_REPORT_SYSTEM_PROMPT).toContain('证据不足')
+    expect(DAY_REPORT_SYSTEM_PROMPT).not.toContain('与平日不同的变化')
+  })
+})
+
+describe('getCoverageFromPayload', () => {
+  it('reports the covered window of the chunks actually included', () => {
+    const payload = buildDayReportPayload(
+      [
+        capture('第一条', '2026-09-05T01:00:00.000Z'),
+        capture('第二条', '2026-09-05T05:00:00.000Z'),
+        capture('第三条', '2026-09-05T09:00:00.000Z')
+      ],
+      '2026-09-05'
+    )
+    expect(getCoverageFromPayload(payload)).toEqual({
+      captureCount: 3,
+      chunkCount: 3,
+      truncated: false,
+      coveredFrom: '2026-09-05T01:00:00.000Z',
+      coveredTo: '2026-09-05T09:00:00.000Z'
+    })
+  })
+})
+
+describe('previewDayReport', () => {
+  it('never touches the network and fails cleanly on an empty day', () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const preview = previewDayReport(db, '2026-09-05')
+    expect(preview.ok).toBe(false)
+    expect(preview.coverage).toBeNull()
+    expect(preview.reason).toContain('没有感知记录')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('shows coverage and target service without sending anything', () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    db.insertRawCapture('C:/captures/one.jpg', '上午的记录', '2026-09-05T01:00:00.000Z')
+    db.insertRawCapture('C:/captures/two.jpg', '下午的记录', '2026-09-05T07:00:00.000Z')
+
+    const preview = previewDayReport(db, '2026-09-05')
+    expect(preview.ok).toBe(true)
+    expect(preview.coverage).toEqual({
+      captureCount: 2,
+      chunkCount: 2,
+      truncated: false,
+      coveredFrom: '2026-09-05T01:00:00.000Z',
+      coveredTo: '2026-09-05T07:00:00.000Z'
+    })
+    expect(preview.targetBaseUrl).toBe('https://api.deepseek.com')
+    expect(preview.targetModel).toBe('deepseek-v4-flash')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('warns when the API key is missing instead of silently failing later', () => {
+    db.insertRawCapture('C:/captures/one.jpg', '有一条记录', '2026-09-05T01:00:00.000Z')
+    const preview = previewDayReport(db, '2026-09-05')
+    expect(preview.ok).toBe(true)
+    expect(preview.reason).toContain('API Key')
+  })
+})
+
 describe('generateDayReport', () => {
   it('fails gracefully without an API key', async () => {
     const result = await generateDayReport(db, '2026-09-05')
@@ -110,6 +181,13 @@ describe('generateDayReport', () => {
     const result = await generateDayReport(db, '2026-09-05')
     expect(result.ok).toBe(true)
     expect(result.narrative).toContain('今日要点')
+    expect(result.coverage).toMatchObject({
+      captureCount: 2,
+      chunkCount: 2,
+      truncated: false,
+      coveredFrom: '2026-09-05T01:00:00.000Z',
+      coveredTo: '2026-09-05T07:00:00.000Z'
+    })
 
     const stored = db.getLatestReport('daily')
     expect(stored?.narrative).toContain('今日要点')

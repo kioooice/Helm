@@ -109,6 +109,36 @@ button.ghost {
   background: #fffdf8;
 }
 
+.helm-confirm {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  background: #fdf8ef;
+}
+
+.helm-confirm h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.helm-confirm p {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.helm-confirm-warn {
+  color: var(--warn);
+}
+
+.helm-confirm code {
+  font-size: 12px;
+  background: var(--paper);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 .helm-settings h2 {
   margin: 0 0 12px;
   font-size: 15px;

@@ -4,6 +4,7 @@ export const IPC_CHANNELS = {
   stopPerception: 'helm:stop-perception',
   pauseForPrivacy: 'helm:pause-privacy',
   captureNow: 'helm:capture-now',
+  previewReport: 'helm:preview-report',
   generateReport: 'helm:generate-report',
   getLatestReport: 'helm:get-latest-report',
   getAiConfig: 'helm:get-ai-config',

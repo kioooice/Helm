@@ -10,7 +10,7 @@ import {
   stopScreenPerception,
   subscribePerceptionStatus
 } from './perception/screen-capture'
-import { generateDayReport } from './ai/report'
+import { generateDayReport, previewDayReport } from './ai/report'
 import {
   getAiProviderConfigStatus,
   saveAiProviderConfig,
@@ -36,6 +36,7 @@ export function registerIpc(db: HelmDb) {
   ipcMain.handle(IPC_CHANNELS.pauseForPrivacy, () => pausePerceptionForPrivacy())
   ipcMain.handle(IPC_CHANNELS.captureNow, () => captureOnce())
   ipcMain.handle(IPC_CHANNELS.getLatestReport, () => db.getLatestReport('daily'))
+  ipcMain.handle(IPC_CHANNELS.previewReport, (_event, date: string) => previewDayReport(db, date))
   ipcMain.handle(IPC_CHANNELS.generateReport, async (_event, date: string) => {
     const result = await generateDayReport(db, date)
     if (result.ok) {

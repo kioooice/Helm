@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type {
   AiProviderConfig,
+  DayReportCoverage,
+  DayReportPreview,
   DayReportResult,
   PerceptionStatus,
   ReportRecord
@@ -26,11 +28,26 @@ function describeStatus(status: PerceptionStatus | null) {
   return '已暂停'
 }
 
+function formatClock(iso: string) {
+  if (!iso) return '未知'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '未知'
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+function describeCoverage(coverage: DayReportCoverage) {
+  const scope = `基于 ${coverage.captureCount} 条记录 · 覆盖 ${formatClock(coverage.coveredFrom)}–${formatClock(coverage.coveredTo)}`
+  return coverage.truncated
+    ? `${scope} · 仅取前 ${coverage.chunkCount} 条，其余未包含`
+    : `${scope} · 共 ${coverage.chunkCount} 条`
+}
+
 function App(): React.JSX.Element {
   const [status, setStatus] = useState<PerceptionStatus | null>(null)
   const [report, setReport] = useState<ReportRecord | null>(null)
   const [reportBusy, setReportBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [pendingPreview, setPendingPreview] = useState<DayReportPreview | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [aiConfig, setAiConfig] = useState<AiProviderConfig | null>(null)
   const [baseUrl, setBaseUrl] = useState('')
@@ -84,7 +101,30 @@ function App(): React.JSX.Element {
     setMessage('已截屏一次。')
   }
 
+  // 第一步：只做本地预览，不发任何网络请求。
   const handleGenerateReport = async () => {
+    setReportBusy(true)
+    setMessage('')
+    try {
+      const preview = await window.helm.previewReport(todayLocalDate())
+      if (!preview.ok || !preview.coverage) {
+        setMessage(preview.reason || '这一天还没有感知记录。')
+        return
+      }
+      setPendingPreview(preview)
+    } finally {
+      setReportBusy(false)
+    }
+  }
+
+  const handleCancelSend = () => {
+    setPendingPreview(null)
+    setMessage('已取消，未发送任何数据。')
+  }
+
+  // 第二步：用户确认后才真正请求模型服务。
+  const handleConfirmSend = async () => {
+    setPendingPreview(null)
     setReportBusy(true)
     setMessage('')
     try {
@@ -119,12 +159,14 @@ function App(): React.JSX.Element {
     setAiMessage(result.reason)
   }
 
+  const reportDateLabel = report ? new Date(report.periodStart).toLocaleDateString('zh-CN') : ''
+
   return (
     <main className="helm">
       <header className="helm-header">
         <div>
           <h1>舵 · Helm</h1>
-          <p className="helm-tagline">一个私有的注意力记录，和一个帮你掌舵的教练。</p>
+          <p className="helm-tagline">从你允许的记录里，找出有依据的发现。</p>
         </div>
         <span className={`helm-status ${status?.running ? 'is-running' : 'is-paused'}`}>
           {describeStatus(status)}
@@ -142,7 +184,7 @@ function App(): React.JSX.Element {
           立即截屏
         </button>
         <button type="button" onClick={handleGenerateReport} disabled={reportBusy}>
-          {reportBusy ? '生成中…' : '生成今日报告'}
+          {reportBusy ? '处理中…' : '生成报告'}
         </button>
         <button type="button" className="ghost" onClick={() => setShowSettings((value) => !value)}>
           {showSettings ? '收起设置' : 'AI 设置'}
@@ -151,6 +193,30 @@ function App(): React.JSX.Element {
 
       {status?.lastError ? <p className="helm-error">感知异常：{status.lastError}</p> : null}
       {message ? <p className="helm-message">{message}</p> : null}
+
+      {pendingPreview?.coverage ? (
+        <section className="helm-confirm">
+          <h2>发送前确认</h2>
+          <p>
+            将把 <strong>{pendingPreview.coverage.captureCount}</strong> 条屏幕 OCR 文本片段（
+            {describeCoverage(pendingPreview.coverage)}）发送到{' '}
+            <code>{pendingPreview.targetBaseUrl}</code>（模型 {pendingPreview.targetModel}）。
+          </p>
+          <p className="helm-confirm-warn">
+            这些文本是原始 OCR
+            内容，未经脱敏，可能包含屏幕上出现过的敏感信息；发送后由该服务按其隐私政策处理。
+          </p>
+          {pendingPreview.reason ? <p className="helm-message">{pendingPreview.reason}</p> : null}
+          <div className="helm-settings-actions">
+            <button type="button" onClick={handleConfirmSend}>
+              确认发送
+            </button>
+            <button type="button" className="ghost" onClick={handleCancelSend}>
+              取消
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {showSettings ? (
         <section className="helm-settings">
@@ -195,20 +261,20 @@ function App(): React.JSX.Element {
       ) : null}
 
       <section className="helm-report">
-        <h2>今日报告</h2>
+        <h2>{report ? `报告 · ${reportDateLabel}` : '报告'}</h2>
         {report ? (
           <>
             <pre className="helm-report-body">{report.narrative}</pre>
             <p className="helm-report-meta">
-              生成于 {new Date(report.createdAt).toLocaleString('zh-CN')} · 原始截屏{' '}
-              {status ? '12 小时后自动删除' : ''}
+              生成于 {new Date(report.createdAt).toLocaleString('zh-CN')} · 原始截屏在采集运行期间按
+              12 小时参数滚动清理（非严格定时删除）
             </p>
           </>
         ) : (
           <p className="helm-empty">
-            还没有报告。开启感知，等今天结束时点“生成今日报告”。
+            还没有报告。开启感知，等今天结束时点“生成报告”。
             <br />
-            原始截屏只保留 12 小时，报告是唯一值得留下的东西。
+            生成前会先显示将要发送的内容，由你确认后才会请求模型服务。
           </p>
         )}
       </section>

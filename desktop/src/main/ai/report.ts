@@ -1,5 +1,10 @@
 import { redactSensitiveText } from '../../shared/redaction'
-import type { DayReportResult, RawCapture } from '../../shared/types'
+import type {
+  DayReportCoverage,
+  DayReportPreview,
+  DayReportResult,
+  RawCapture
+} from '../../shared/types'
 import type { HelmDb } from '../db'
 import { readAiProviderConfig } from './config'
 
@@ -59,6 +64,18 @@ export function buildDayReportPayload(captures: RawCapture[], date: string): Day
   }
 }
 
+export function getCoverageFromPayload(payload: DayReportPayload): DayReportCoverage {
+  const first = payload.chunks[0]
+  const last = payload.chunks[payload.chunks.length - 1]
+  return {
+    captureCount: payload.captureCount,
+    chunkCount: payload.chunkCount,
+    truncated: payload.truncated,
+    coveredFrom: first?.at ?? '',
+    coveredTo: last?.at ?? ''
+  }
+}
+
 function extractResponseText(payload: unknown) {
   if (!payload || typeof payload !== 'object') {
     return ''
@@ -78,21 +95,26 @@ function getDeepSeekChatCompletionsUrl(baseUrl: string) {
 }
 
 export const DAY_REPORT_SYSTEM_PROMPT = [
-  '你是 Helm（舵）的每日回顾助手。Helm 帮助用户看清自己的注意力去向，支持渐进的行为改变。',
-  '报告纪律：一屏以内；先给结论；最多三条要点；只讲与平日不同的变化，不复述流水账；',
+  '你是 Helm（舵）的每日回顾助手。Helm 帮助用户看清自己的注意力去向。',
+  '本次输入仅来自一段局部保留的屏幕 OCR 记录：未提供历史基线、目标和任何用户画像，',
+  '因此禁止“比平时 / 比昨天 / 越来越”等一切比较性或趋势性表述；只能描述本次记录覆盖范围内',
+  '可以直接观察到的内容，证据不足时明确写“证据不足”，允许零条发现。',
+  '报告纪律：一屏以内；先给结论；条数随证据而定，不凑数。',
   '语气是冷静、非评判的教练，绝不施压或引起内疚；使用中文；',
-  '只根据输入的 OCR 时间片段总结，不要编造其中不存在的细节，不要复述疑似密码或密钥的内容。'
+  '只根据输入的 OCR 时间片段总结，不编造其中不存在的细节，不复述疑似密码或密钥的内容。'
 ].join('')
 
-export async function generateDayReport(db: HelmDb, date: string): Promise<DayReportResult> {
-  const aiConfig = readAiProviderConfig()
-  if (!aiConfig.apiKey) {
-    return {
-      ok: false,
-      reason: '缺少 DeepSeek API Key，请先在设置里配置。'
+type CollectedReportInput =
+  | { ok: false; reason: string }
+  | {
+      ok: true
+      bounds: { startIso: string; endIso: string }
+      payload: DayReportPayload
+      coverage: DayReportCoverage
+      apiKeyMissing: boolean
     }
-  }
 
+function collectDayReportInput(db: HelmDb, date: string): CollectedReportInput {
   let bounds: { startIso: string; endIso: string }
   try {
     bounds = getDayBounds(date)
@@ -112,6 +134,58 @@ export async function generateDayReport(db: HelmDb, date: string): Promise<DayRe
   }
 
   const payload = buildDayReportPayload(captures, date)
+  return {
+    ok: true,
+    bounds,
+    payload,
+    coverage: getCoverageFromPayload(payload),
+    apiKeyMissing: !readAiProviderConfig().apiKey
+  }
+}
+
+// Dry run: computes exactly what would be sent and never touches the network.
+export function previewDayReport(db: HelmDb, date: string): DayReportPreview {
+  const collected = collectDayReportInput(db, date)
+  if (!collected.ok) {
+    return {
+      ok: false,
+      reason: collected.reason,
+      date,
+      coverage: null,
+      targetBaseUrl: '',
+      targetModel: ''
+    }
+  }
+
+  const aiConfig = readAiProviderConfig()
+  return {
+    ok: true,
+    reason: collected.apiKeyMissing ? '尚未配置 API Key，发送前需要先在设置里配置。' : '',
+    date,
+    coverage: collected.coverage,
+    targetBaseUrl: aiConfig.baseUrl,
+    targetModel: aiConfig.model
+  }
+}
+
+export async function generateDayReport(db: HelmDb, date: string): Promise<DayReportResult> {
+  const aiConfig = readAiProviderConfig()
+  if (!aiConfig.apiKey) {
+    return {
+      ok: false,
+      reason: '缺少 DeepSeek API Key，请先在设置里配置。'
+    }
+  }
+
+  const collected = collectDayReportInput(db, date)
+  if (!collected.ok) {
+    return {
+      ok: false,
+      reason: collected.reason
+    }
+  }
+
+  const { bounds, payload, coverage } = collected
 
   try {
     const response = await fetch(getDeepSeekChatCompletionsUrl(aiConfig.baseUrl), {
@@ -162,6 +236,9 @@ export async function generateDayReport(db: HelmDb, date: string): Promise<DayRe
       metrics: JSON.stringify({
         captureCount: payload.captureCount,
         chunkCount: payload.chunkCount,
+        truncated: payload.truncated,
+        coveredFrom: coverage.coveredFrom,
+        coveredTo: coverage.coveredTo,
         model: aiConfig.model
       }),
       narrative
@@ -169,8 +246,9 @@ export async function generateDayReport(db: HelmDb, date: string): Promise<DayRe
 
     return {
       ok: true,
-      reason: '已生成今日报告。',
-      narrative
+      reason: '已生成报告。',
+      narrative,
+      coverage
     }
   } catch (cause) {
     return {

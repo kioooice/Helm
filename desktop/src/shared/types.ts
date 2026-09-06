@@ -81,8 +81,26 @@ export type AiProviderConnectionTestResult = {
   model: string
 }
 
+export type DayReportCoverage = {
+  captureCount: number
+  chunkCount: number
+  truncated: boolean
+  coveredFrom: string
+  coveredTo: string
+}
+
+export type DayReportPreview = {
+  ok: boolean
+  reason: string
+  date: string
+  coverage: DayReportCoverage | null
+  targetBaseUrl: string
+  targetModel: string
+}
+
 export type DayReportResult = {
   ok: boolean
   reason: string
   narrative?: string
+  coverage?: DayReportCoverage
 }

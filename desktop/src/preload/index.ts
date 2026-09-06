@@ -4,6 +4,7 @@ import type {
   AiProviderConfig,
   AiProviderConfigInput,
   AiProviderConnectionTestResult,
+  DayReportPreview,
   DayReportResult,
   PerceptionStatus,
   ReportRecord
@@ -16,6 +17,7 @@ export type HelmApi = {
   pauseForPrivacy: () => Promise<PerceptionStatus>
   captureNow: () => Promise<PerceptionStatus>
   getLatestReport: () => Promise<ReportRecord | null>
+  previewReport: (date: string) => Promise<DayReportPreview>
   generateReport: (date: string) => Promise<DayReportResult>
   getAiConfig: () => Promise<AiProviderConfig>
   saveAiConfig: (input: AiProviderConfigInput) => Promise<AiProviderConfig>
@@ -32,6 +34,7 @@ const api: HelmApi = {
   pauseForPrivacy: () => ipcRenderer.invoke(IPC_CHANNELS.pauseForPrivacy),
   captureNow: () => ipcRenderer.invoke(IPC_CHANNELS.captureNow),
   getLatestReport: () => ipcRenderer.invoke(IPC_CHANNELS.getLatestReport),
+  previewReport: (date: string) => ipcRenderer.invoke(IPC_CHANNELS.previewReport, date),
   generateReport: (date: string) => ipcRenderer.invoke(IPC_CHANNELS.generateReport, date),
   getAiConfig: () => ipcRenderer.invoke(IPC_CHANNELS.getAiConfig),
   saveAiConfig: (input: AiProviderConfigInput) =>
