@@ -27,7 +27,9 @@ Helm 探索如何从用户允许使用的记录中，找出有依据、值得关
 
 截图与 OCR 结果先保存在本机。OCR 方式有两种，由用户在设置里选择：
 
-- **本地 OCR（默认）**：Windows Runtime 识别，截图不出本机。
+- **本地 OCR（默认）**：优先用 RapidOCR（PP-OCR 模型的 ONNX 本地版，需 Python 3.10+ 并
+  `pip install -r desktop/resources/rapid-ocr-requirements.txt`），未安装时自动回退 Windows
+  原生 OCR / Tesseract。无论哪种本地引擎，**数据都不出本机**。
 - **Paddle 云端 OCR（默认关闭）**：启用后，**每张屏幕截图会上传到 `paddleocr.aistudio-app.com`** 做文字识别（用户自己的服务账号）。启用即视为对该外发行为的明确同意；界面上有相应声明。
 
 点击生成报告时，**OCR 文本片段会发送到用户配置的模型服务地址**（发送前有确认步骤）。现有代码没有保证这些文本已脱敏。不能将当前实现描述成"原始 OCR 从不外发"或"仅发送匿名事件"。

@@ -4,6 +4,7 @@ import { app } from 'electron'
 import type { OcrConfigStatus, OcrProvider, OcrResult } from '../shared/types'
 import { runLocalOcr } from './ocr'
 import { runPaddleOcr } from './paddle-ocr'
+import { runRapidOcr } from './rapid-ocr'
 
 const CONFIG_FILE_NAME = 'helm-ocr-config.json'
 const DEFAULT_PADDLE_MODEL = 'PP-OCRv6'
@@ -130,11 +131,18 @@ export function saveOcrConfig(input: {
 }
 
 // Reads the config on every call so a settings change takes effect without
-// restarting the perception loop.
+// restarting the perception loop. Local chain: RapidOCR (PP-OCR models, fully
+// local, needs Python + rapidocr_onnxruntime) first, then Windows OCR, then
+// Tesseract — first available engine wins.
 export async function runConfiguredOcr(imagePath: string): Promise<OcrResult> {
   const config = resolveConfig()
   if (config.provider === 'paddle' && config.token) {
     return runPaddleOcr(imagePath, { token: config.token, model: config.model })
+  }
+
+  const rapid = await runRapidOcr(imagePath)
+  if (rapid.available) {
+    return rapid
   }
   return runLocalOcr(imagePath)
 }
