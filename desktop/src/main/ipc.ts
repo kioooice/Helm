@@ -16,6 +16,8 @@ import {
   saveAiProviderConfig,
   testAiProviderConnection
 } from './ai/config'
+import { getOcrConfigStatus, saveOcrConfig } from './ocr-config'
+import type { OcrConfigInput } from '../shared/types'
 
 export function registerIpc(db: HelmDb) {
   const broadcastStatus = () => {
@@ -54,5 +56,9 @@ export function registerIpc(db: HelmDb) {
   )
   ipcMain.handle(IPC_CHANNELS.testAiConfig, (_event, input: AiProviderConfigInput) =>
     testAiProviderConnection(input)
+  )
+  ipcMain.handle(IPC_CHANNELS.getOcrConfig, () => getOcrConfigStatus())
+  ipcMain.handle(IPC_CHANNELS.saveOcrConfig, (_event, input: OcrConfigInput) =>
+    saveOcrConfig(input)
   )
 }

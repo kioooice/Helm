@@ -1,14 +1,11 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import type { OcrResult } from '../shared/types'
 
 const execFileAsync = promisify(execFile)
 const OCR_TIMEOUT_MS = 20_000
 
-export type OcrResult = {
-  text: string
-  available: boolean
-  status: string
-}
+export type { OcrResult }
 
 const WINDOWS_OCR_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'

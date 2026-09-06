@@ -6,6 +6,8 @@ import type {
   AiProviderConnectionTestResult,
   DayReportPreview,
   DayReportResult,
+  OcrConfigInput,
+  OcrConfigStatus,
   PerceptionStatus,
   ReportRecord
 } from '../shared/types'
@@ -22,6 +24,8 @@ export type HelmApi = {
   getAiConfig: () => Promise<AiProviderConfig>
   saveAiConfig: (input: AiProviderConfigInput) => Promise<AiProviderConfig>
   testAiConfig: (input: AiProviderConfigInput) => Promise<AiProviderConnectionTestResult>
+  getOcrConfig: () => Promise<OcrConfigStatus>
+  saveOcrConfig: (input: OcrConfigInput) => Promise<OcrConfigStatus>
   onStatusChanged: (handler: (status: PerceptionStatus) => void) => () => void
   onReportGenerated: (handler: (result: DayReportResult) => void) => () => void
 }
@@ -41,6 +45,8 @@ const api: HelmApi = {
     ipcRenderer.invoke(IPC_CHANNELS.saveAiConfig, input),
   testAiConfig: (input: AiProviderConfigInput) =>
     ipcRenderer.invoke(IPC_CHANNELS.testAiConfig, input),
+  getOcrConfig: () => ipcRenderer.invoke(IPC_CHANNELS.getOcrConfig),
+  saveOcrConfig: (input: OcrConfigInput) => ipcRenderer.invoke(IPC_CHANNELS.saveOcrConfig, input),
   onStatusChanged: (handler) => {
     const listener = (_event: unknown, status: PerceptionStatus) => handler(status)
     ipcRenderer.on(IPC_CHANNELS.statusChanged, listener)

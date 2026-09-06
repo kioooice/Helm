@@ -8,6 +8,7 @@ import {
   stopScreenPerception
 } from './perception/screen-capture'
 import { buildTrayMenu, createTrayIcon, shouldHideWindowToTray } from './tray'
+import { runConfiguredOcr } from './ocr-config'
 import { is } from '@electron-toolkit/utils'
 
 let db: HelmDb | null = null
@@ -99,7 +100,8 @@ app.whenReady().then(() => {
   db = createHelmDb(join(userDataPath, 'helm.db'))
   configureScreenPerception({
     db,
-    captureDirectory: join(userDataPath, 'auto-captures')
+    captureDirectory: join(userDataPath, 'auto-captures'),
+    runOcr: runConfiguredOcr
   })
   void pruneExpiredCaptures()
   registerIpc(db)

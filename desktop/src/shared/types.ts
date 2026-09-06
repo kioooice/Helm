@@ -60,6 +60,28 @@ export type PerceptionStatus = {
   ocrStatus: string
 }
 
+export type OcrResult = {
+  text: string
+  available: boolean
+  status: string
+}
+
+export type OcrProvider = 'local' | 'paddle'
+
+export type OcrConfigStatus = {
+  provider: OcrProvider
+  model: string
+  tokenConfigured: boolean
+  tokenPreview: string
+}
+
+export type OcrConfigInput = {
+  provider?: string
+  token?: string
+  clearToken?: boolean
+  model?: string
+}
+
 export type AiProviderConfig = {
   provider: 'deepseek'
   baseUrl: string

@@ -4,6 +4,7 @@ import type {
   DayReportCoverage,
   DayReportPreview,
   DayReportResult,
+  OcrConfigStatus,
   PerceptionStatus,
   ReportRecord
 } from '../../shared/types'
@@ -54,6 +55,10 @@ function App(): React.JSX.Element {
   const [model, setModel] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [aiMessage, setAiMessage] = useState('')
+  const [ocrStatus, setOcrStatus] = useState<OcrConfigStatus | null>(null)
+  const [ocrProvider, setOcrProvider] = useState<'local' | 'paddle'>('local')
+  const [ocrToken, setOcrToken] = useState('')
+  const [ocrModel, setOcrModel] = useState('')
 
   const refreshReport = useCallback(async () => {
     const latest = await window.helm.getLatestReport()
@@ -62,16 +67,20 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     const bootstrap = async () => {
-      const [initialStatus, latestReport, config] = await Promise.all([
+      const [initialStatus, latestReport, config, ocr] = await Promise.all([
         window.helm.getStatus(),
         window.helm.getLatestReport(),
-        window.helm.getAiConfig()
+        window.helm.getAiConfig(),
+        window.helm.getOcrConfig()
       ])
       setStatus(initialStatus)
       setReport(latestReport)
       setAiConfig(config)
       setBaseUrl(config.baseUrl)
       setModel(config.model)
+      setOcrStatus(ocr)
+      setOcrProvider(ocr.provider)
+      setOcrModel(ocr.model)
     }
     void bootstrap()
     const unsubscribeStatus = window.helm.onStatusChanged(setStatus)
@@ -157,6 +166,19 @@ function App(): React.JSX.Element {
       ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {})
     })
     setAiMessage(result.reason)
+  }
+
+  const handleSaveOcrConfig = async () => {
+    const saved = await window.helm.saveOcrConfig({
+      provider: ocrProvider,
+      model: ocrModel.trim(),
+      ...(ocrToken.trim() ? { token: ocrToken.trim() } : {})
+    })
+    setOcrStatus(saved)
+    setOcrToken('')
+    setAiMessage(
+      saved.provider === 'paddle' ? '已启用 Paddle 云端 OCR。' : '已启用本地 OCR，数据不出本机。'
+    )
   }
 
   const reportDateLabel = report ? new Date(report.periodStart).toLocaleDateString('zh-CN') : ''
@@ -257,6 +279,54 @@ function App(): React.JSX.Element {
             </button>
           </div>
           {aiMessage ? <p className="helm-message">{aiMessage}</p> : null}
+
+          <h2 className="helm-ocr-title">OCR 方式</h2>
+          <label>
+            识别方式
+            <select
+              value={ocrProvider}
+              onChange={(event) =>
+                setOcrProvider(event.target.value === 'paddle' ? 'paddle' : 'local')
+              }
+            >
+              <option value="local">本地 OCR（默认，数据不出本机）</option>
+              <option value="paddle">Paddle 云端 OCR（更准，截图会上传）</option>
+            </select>
+          </label>
+          {ocrProvider === 'paddle' ? (
+            <>
+              <p className="helm-confirm-warn">
+                启用后，每张屏幕截图会上传到 <code>paddleocr.aistudio-app.com</code>{' '}
+                进行文字识别（你提供的服务账号，每天 20000 次额度）；关闭则只在本机识别。
+              </p>
+              <label>
+                Paddle Token
+                <input
+                  type="password"
+                  value={ocrToken}
+                  onChange={(event) => setOcrToken(event.target.value)}
+                  placeholder={
+                    ocrStatus?.tokenConfigured
+                      ? `已配置（${ocrStatus.tokenPreview}）`
+                      : '粘贴 AI Studio 的 Token'
+                  }
+                />
+              </label>
+              <label>
+                模型
+                <input
+                  value={ocrModel}
+                  onChange={(event) => setOcrModel(event.target.value)}
+                  placeholder="PP-OCRv6"
+                />
+              </label>
+            </>
+          ) : null}
+          <div className="helm-settings-actions">
+            <button type="button" onClick={handleSaveOcrConfig}>
+              保存 OCR 设置
+            </button>
+          </div>
         </section>
       ) : null}
 

@@ -10,6 +10,8 @@ export const IPC_CHANNELS = {
   getAiConfig: 'helm:get-ai-config',
   saveAiConfig: 'helm:save-ai-config',
   testAiConfig: 'helm:test-ai-config',
+  getOcrConfig: 'helm:get-ocr-config',
+  saveOcrConfig: 'helm:save-ocr-config',
   statusChanged: 'helm:status-changed',
   reportGenerated: 'helm:report-generated'
 } as const
