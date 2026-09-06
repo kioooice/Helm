@@ -18,6 +18,15 @@ def main():
         pass
 
     try:
+        # PyInstaller 冻结环境下 rapidocr 按名动态加载子模块会失效，
+        # 预先注册到 sys.modules（与 snipaste-ocr 相同的处理）。
+        import sys as _sys
+        from rapidocr_onnxruntime.ch_ppocr_v2_cls import text_cls as _cls_m
+        from rapidocr_onnxruntime.ch_ppocr_v3_det import text_detect as _det_m
+        from rapidocr_onnxruntime.ch_ppocr_v3_rec import text_recognize as _rec_m
+        _sys.modules.setdefault("ch_ppocr_v3_det", _det_m)
+        _sys.modules.setdefault("ch_ppocr_v3_rec", _rec_m)
+        _sys.modules.setdefault("ch_ppocr_v2_cls", _cls_m)
         from rapidocr_onnxruntime import RapidOCR
     except Exception as cause:  # 未安装依赖时如实上报，由调用方回退到 Windows OCR
         print(json.dumps({"ok": False, "fatal": f"rapidocr unavailable: {cause}"}), flush=True)

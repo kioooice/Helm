@@ -289,7 +289,7 @@ function App(): React.JSX.Element {
                 setOcrProvider(event.target.value === 'paddle' ? 'paddle' : 'local')
               }
             >
-              <option value="local">本地 OCR（默认，数据不出本机）</option>
+              <option value="local">本地 OCR（默认，内置 RapidOCR，数据不出本机）</option>
               <option value="paddle">Paddle 云端 OCR（更准，截图会上传）</option>
             </select>
           </label>

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { desktopCapturer, screen } from 'electron'
 import type { PerceptionPauseReason, PerceptionStatus } from '../../shared/types'
 import { buildCaptureFingerprint, isDuplicateRecent, rememberFingerprint } from './dedupe'
-import { runLocalOcr, type OcrResult } from '../ocr'
+import type { OcrResult } from '../../shared/types'
 
 // Raw captures are disposable: once their OCR text exists, the image is only
 // kept for a short window so the user can still inspect the evidence.
@@ -109,6 +109,12 @@ async function defaultCaptureDesktopImage() {
   return source.thumbnail.resize({ ...targetSize, quality: 'good' }).toJPEG(DEFAULT_JPEG_QUALITY)
 }
 
+const defaultRunOcr = async (): Promise<OcrResult> => ({
+  text: '',
+  available: false,
+  status: '未配置 OCR 引擎'
+})
+
 function getRetentionCutoffIso(retentionMs: number) {
   return new Date(Date.now() - retentionMs).toISOString()
 }
@@ -130,7 +136,7 @@ export function configureScreenPerception(options: {
     captureDirectory: options.captureDirectory,
     retentionMs: options.retentionMs ?? DEFAULT_RETENTION_MS,
     captureDesktopImage: options.captureDesktopImage ?? defaultCaptureDesktopImage,
-    runOcr: options.runOcr ?? runLocalOcr
+    runOcr: options.runOcr ?? defaultRunOcr
   }
 }
 

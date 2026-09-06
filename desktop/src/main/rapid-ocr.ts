@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 import { app } from 'electron'
@@ -24,6 +25,19 @@ type Sidecar = {
 
 let sidecar: Sidecar | null = null
 let sidecarUnavailable = false
+
+// The PyInstaller-frozen sidecar ships inside the package so no Python setup
+// is needed on target machines.
+function getFrozenSidecarPath(baseDir: string = __dirname) {
+  const fromEnv = process.env.HELM_SIDECAR_EXE?.trim()
+  if (fromEnv) {
+    return fromEnv
+  }
+  const frozenPath = app?.isPackaged
+    ? join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'rapid-ocr-server.exe')
+    : join(baseDir, '../../resources/rapid-ocr-server.exe')
+  return existsSync(frozenPath) ? frozenPath : null
+}
 
 export function resolveSidecarScript(baseDir: string = __dirname) {
   const fromEnv = process.env.HELM_SIDECAR_SCRIPT?.trim()
@@ -82,16 +96,22 @@ function ensureSidecar(options: RapidOcrOptions): Sidecar | null {
     return sidecar
   }
 
-  const scriptPath = options.scriptPath ?? resolveSidecarScript()
-  const pythonPath = options.pythonPath ?? process.env.HELM_PYTHON?.trim() ?? 'python'
-  if (!isRapidocrInstalled(pythonPath)) {
+  const frozenPath = getFrozenSidecarPath()
+  const command = frozenPath
+    ? [frozenPath]
+    : [
+        options.pythonPath ?? process.env.HELM_PYTHON?.trim() ?? 'python',
+        options.scriptPath ?? resolveSidecarScript()
+      ]
+
+  if (!frozenPath && !isRapidocrInstalled(command[0])) {
     sidecarUnavailable = true
     return null
   }
 
   let active: Sidecar | null = null
   try {
-    const child = spawn(pythonPath, [scriptPath], {
+    const child = spawn(command[0], command.slice(1), {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, PYTHONIOENCODING: 'utf-8' }

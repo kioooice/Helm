@@ -3,3 +3,5 @@
 **/dist/
 **/.eslintcache
 *.log
+desktop/resources/rapid-ocr-server.exe
+desktop/.pyinstaller-build/

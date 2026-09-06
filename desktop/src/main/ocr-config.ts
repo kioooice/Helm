@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { OcrConfigStatus, OcrProvider, OcrResult } from '../shared/types'
-import { runLocalOcr } from './ocr'
 import { runPaddleOcr } from './paddle-ocr'
 import { runRapidOcr } from './rapid-ocr'
 
@@ -131,18 +130,13 @@ export function saveOcrConfig(input: {
 }
 
 // Reads the config on every call so a settings change takes effect without
-// restarting the perception loop. Local chain: RapidOCR (PP-OCR models, fully
-// local, needs Python + rapidocr_onnxruntime) first, then Windows OCR, then
-// Tesseract — first available engine wins.
+// restarting the perception loop. The local engine is the bundled RapidOCR
+// sidecar (PP-OCR models, fully local); native Windows OCR was dropped on
+// purpose — recognition quality was judged unacceptable by the user.
 export async function runConfiguredOcr(imagePath: string): Promise<OcrResult> {
   const config = resolveConfig()
   if (config.provider === 'paddle' && config.token) {
     return runPaddleOcr(imagePath, { token: config.token, model: config.model })
   }
-
-  const rapid = await runRapidOcr(imagePath)
-  if (rapid.available) {
-    return rapid
-  }
-  return runLocalOcr(imagePath)
+  return runRapidOcr(imagePath)
 }
