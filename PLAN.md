@@ -1,166 +1,79 @@
-# Helm 开发计划
+# Helm 验证与开发计划
 
-这份计划回答两个问题：**现在建什么**，以及**为什么这样排序**。
+更新：2026-09-06。此计划取代旧版按 v0/v1/v2/v3 扩建的安排；旧说明保留在 Git 历史，不再作为执行要求。当前代码事实见 [当前实现说明](docs/current-state.md)。
 
-## 指导原则
+## 目标与当前状态
 
-1. **先验证"报告有没有人看"，再投 AI 理解的深度。**
-   最大的坑是先花几个月做完美的结构化抽取，结果报告自己没人打开。
-   每一版都要能真实地跑起来、产生你能读的报告。
+先验证：从获准使用的记录中，能否持续产生有依据、对用户有意义、阅读负担低的发现。个人学习收益、个人工具价值与商业产品价值分别评估，不能相互代替。
 
-2. **原始数据是可抛弃的，事件和趋势是资产。**
-   截屏 12 小时即焚。events / reports / goals / baselines 才是要长期积累的东西。
-   架构上从第一天就把"数据源"和"报告引擎"解耦。
+当前仅完成方向与文档调整，V0、T0 等下列任务均**未执行、未验收**。默认下一项是 V0；需要运行现有桌面端做真实数据试用时，T0 是前置条件。V0 可使用已授权样本人工辅助完成，不依赖新增桌面功能。
 
-3. **感知无关（source-agnostic）。**
-   今天数据来自截屏，明天来自音频、眼镜、手动记录。
-   事件表带 `source` 字段，报告引擎只消费结构化事件，不碰原始输入。
+| 阶段 | 要回答的问题 | 推进条件 |
+| --- | --- | --- |
+| V0 样本价值验证 | 高质量、有依据的发现是否有用？ | 规划助手复核依据，用户提供具体价值反馈 |
+| T0 原型事实与边界修正 | 输入、覆盖、外发和报告表述是否一致？ | 技术验收通过，才进入真实桌面试用 |
+| V1 最小可纠正闭环 | 查看依据与纠正能否改善结果？ | V0 有继续验证理由，T0 通过，任务包已细化 |
+| V2 小范围持续试用 | 多个周期仍有价值，且负担可接受吗？ | V1 通过，事先约定试用范围和退出条件 |
+| 后续选择 | 是否需要新输入、目标支持或干预？ | 根据试用缺口另行规划 |
 
-4. **非评判、只讲变化。**
-   报告的产品纪律：一屏、结论先行、最多三条、只讲 delta、语气是教练不是考勤机。
+不承诺固定周数，不预先锁定日报、截图或单一教练角色。不立即引入新框架、音频、眼镜、通用插件系统或复杂指标平台。
 
-## 数据模型（核心）
+## V0：先拿出值得判断的样例
 
-```sql
--- 原始感知记录：可抛弃的临时层，12 小时后连记录带文件一起删除
-create table raw_captures (
-  id integer primary key autoincrement,
-  image_path text not null,
-  ocr_text text not null default '',
-  created_at text not null default ''
-);
+**负责人**：执行模型整理样本与候选发现；规划助手复核推理与依据；用户判断是否有用。
 
--- 结构化行为事件：核心资产，感知无关
-create table events (
-  id integer primary key autoincrement,
-  source text not null default 'screen',  -- screen | audio | manual | glasses(未来)
-  timestamp text not null,                -- ISO 时间
-  app_name text not null default '',
-  window_title text not null default '',
-  activity text not null default '',      -- 阅读/写作/编程/沟通/浏览/娱乐...
-  topic text not null default '',         -- 注意力主题，如 "Rust 学习"
-  mode text not null default '',          -- input | output | communication | consumption
-  artifacts text not null default '',     -- 相关链接/文件，JSON 数组
-  confidence real not null default 0.5,
-  raw_ref text not null default '',       -- 指向原始截图（12h 后失效）
-  created_at text not null default ''
-);
-create index events_timestamp on events (timestamp);
-create index events_source_time on events (source, timestamp);
-create index events_topic on events (topic);
+**输入**：用户明确允许本任务使用的少量对话或项目记录，可覆盖约一周；记录来源、时间范围、明显缺口及允许的处理方式。已有附件也不自动意味着允许上传给另一个模型服务。无可用真实样本时可以准备合成示例，但不能据此宣布产品价值成立。
 
--- 每日/每周报告
-create table reports (
-  id integer primary key autoincrement,
-  kind text not null default 'daily',     -- daily | weekly
-  period_start text not null,
-  period_end text not null,
-  metrics text not null default '',       -- JSON：度量结果
-  narrative text not null default '',     -- 报告正文（一屏）
-  created_at text not null default ''
-);
+**输出**：
 
--- 用户确认的目标
-create table goals (
-  id integer primary key autoincrement,
-  title text not null,
-  topic_keywords text not null default '',-- 用于对齐的关键词，JSON
-  target_mode text not null default '',   -- 期望增加的模式，如 output
-  status text not null default 'active',  -- active | paused | done
-  created_at text not null default '',
-  updated_at text not null default ''
-);
+- 简短样本清单与覆盖说明，真实材料不提交公开仓库。
+- 一份“发现与待确认问题”：默认少量内容，每条带可定位依据，数量随证据而定，允许零条。
+- 至少保留一个被否决的候选及否决理由，检查模型是否把猜测包装成发现。
+- 按 [验收约定](docs/acceptance.md) 记录技术复核和用户反馈，未知项写未知。
 
--- 纵向基线：随时间复利的护城河
-create table baselines (
-  id integer primary key autoincrement,
-  metric text not null,                   -- 如 output_ratio / focus_block_min
-  period text not null,                   -- 如 2026-W36 / 2026-09
-  value real not null,
-  sample_size integer not null default 0,
-  created_at text not null default ''
-);
-```
+**不做**：新采集器、自动日报、事件大模型、目标系统、复杂评分、长期用户画像。
 
-## 从 brain 继承的模块
+**验收与下一步**：先排除无依据、覆盖误读和常识复述，再请用户判断哪条带来新认识或帮助判断。小样本只能支持继续试验。若无价值，区分输入缺失、生成质量、呈现负担和需求不成立；只针对明确原因安排下一轮，不自动扩建，也不无限打磨。
 
-以下模块从 brain 拆解、改造、去 brain 化后迁入：
+## T0：真实桌面试用前的最小修正任务包
 
-| brain 模块 | Helm 位置 | 改动 |
-|-----------|----------|------|
-| `windows-ocr.ts` | `desktop/src/main/ocr.ts` | 环境变量前缀 `BRAIN_` → `HELM_`，几乎不变 |
-| `auto-capture.ts` | `desktop/src/main/perception/screen-capture.ts` | 去 `store` 耦合，事件直接写 `events` 表；保留隐私暂停、12h 清理、可注入 capture/OCR |
-| `ai-config.ts` | `desktop/src/main/ai-config.ts` | 配置文件名 `brain-ai-config` → `helm-ai-config`，逻辑不变 |
-| `sensitive-redaction.ts` | `desktop/src/shared/redaction.ts` | 原样搬，API Key 脱敏 |
-| `dedupe.ts` | `desktop/src/main/perception/dedupe.ts` | 复用指纹逻辑，用于截图去重 |
-| `background.ts` / `window-bounds.ts` | `desktop/src/main/` | 托盘、窗口，改标题为 Helm |
-| store 的 SQLite 模式 | `desktop/src/main/db.ts` | 全新：events/reports/goals/baselines，去掉盒子/卡片 |
+**目标**：让当前原型如实说明看到了什么、发送了什么、能够得出什么结论。本阶段不实现完整洞察系统。
 
-**不搬的**：盒子、卡片、GTD 加工字段、批量管理、Android（暂缓）。那是 brain 的形态，不是 Helm 的。
+**输入**：最新源码、current-state 中五项差距、合成 OCR 样本。开发范围以现有报告链路与界面为主。
 
-## 里程碑
+**执行顺序**：
 
-### v0 —— 跑通"截屏 → 报告"的最小闭环（1~2 周）
+1. 先确认实际请求 payload，列出数据流和受影响文件；不要只改提示词。
+2. 在报告触发处说明外发 OCR、接收服务和数据范围，提供可取消的发送前确认；不得在确认前发出报告请求。
+3. 报告输入/输出明确当前是局部记录；呈现来源时间范围、条数、截断情况。不能恢复的采集缺口标为未知，不能将最早到最晚快照之间都算作持续观察。
+4. 未提供有效可比历史时，禁用“比平时”等比较要求；资料不足时允许输出不足说明。用户界面不把旧报告误标为今日结果。
+5. 明示当前保留与清理行为；本包不悄悄改保留期限，不承诺严格删除。若必须改变存储或清理设计，先提交具体方案给规划助手。
+6. 增加针对外发取消、无历史对比、无数据/局部数据/截断、报告日期的必要测试；提供可复现的界面和请求验证记录。
 
-**目标**：每天结束能看到一份纯文本的今日报告，哪怕还很粗糙。
+**优先阅读文件**：desktop/src/main/ai/report.ts、main/ipc.ts、shared/types.ts、preload/index.ts、renderer/src/App.tsx（后四项均位于 desktop/src/ 下）。可调整必要关联文件；大范围架构变化须说明必要性。
 
-- [x] Electron 骨架 + SQLite 事件表（上面的 schema）
-- [x] 屏幕感知：定时截屏 + Windows OCR（继承自 brain，Tesseract 兜底）
-- [x] 去重：OCR 文本指纹 + 10 分钟重复窗口（会话切分留给 v1）
-- [x] 蒸馏 v0（简化版）：当天片段截断后单次调用 LLM 生成报告（map-reduce 分层留到数据量证明有必要时再做）
-- [x] 报告 v0：主窗口一屏报告 + 托盘开关感知
-- [x] 隐私：手动/隐私暂停、12h 原始图自动焚毁
+**完成条件**：合成数据演示“确认→请求→局部报告”和“取消→无请求”，源码与界面一致，相关测试及构建结果有记录。模型生成的真实语义另列人工检查；仅 mock 测试不能证明它从不胡乱比较。
 
-**当前状态（2026-09-05）**：v0 骨架已落地并通过 37 个测试、lint / typecheck / build 全绿。
-尚未真机长时间跑过——下一步是连续运行两周做"报告愿意不愿意打开"的验证。
+**交接**：按 AGENTS.md 提交证据，等待规划助手阶段验收。T0 通过只代表可以进行受控原型试用，不代表洞察有价值。
 
-**验证点**：连续跑两周，问自己——这份粗糙的报告，我愿意每天打开吗？
-愿意 → 进 v1 投深度；不愿意 → 停下来改报告形态，而不是加 AI。
+## V1：最小证据与纠正闭环（待细化）
 
-### v1 —— 结构化事件 + 度量（2~4 周）
+V0 提供继续理由且 T0 通过后，由规划助手根据实际样例制定可执行任务包。
 
-**目标**：从"摘要"升级为"对照"，报告开始说"你比昨天如何"。
+最小行为：打开一条发现 → 定位获准保留的依据 → 标记有用/不准确或补充解释 → 重新生成时明确处理这项纠正。事实纠正和个人偏好分别存储；争议记录不能静默覆盖历史事实。
 
-- [ ] 蒸馏 v1：逐片段 AI 结构化抽取，写入 events 表（app/activity/topic/mode）
-- [ ] 度量引擎：活动模式分布、注意力主题分布、专注质量（窗口切换频率、长会话块）
-- [ ] 报告 v1：一屏。3 个数字 + 1 个发现 + 1 句建议。只讲 delta。
-- [ ] 纠错入口：误标一处可点"这段其实是工作"，固化成个人规则
+任务包必须先确定证据最小字段、源记录过期后的呈现、保留与删除关系、纠正生效范围、存储兼容性。可先使用最简单的形式，不为了未来全场景设计庞大事件本体。默认不增加强制标签、每日打卡或资料管理负担。
 
-**验证点**：报告的每一行是否都"相对基线或目标"在说话，而不是陈述流水账。
+验收需要展示同一例子的纠正前后变化、来源过期与冲突处理，而不只展示漂亮报告页面。
 
-### v2 —— 目标循环（4~8 周）
+## V2：持续试用（待细化）
 
-**目标**：形成"现状 → 目标 → 慢慢改变"的完整反馈环。
+约定少量观察周期和用户愿意提供的最小反馈，检查：有价值发现是否重复出现、误解能否修正、阅读与纠正负担、是否影响实际判断。打开率只是辅助信号；不打开可能是时机、展示或质量问题。
 
-- [ ] 目标设定零摩擦：AI 从观察到的事实里提议目标，用户只点确认
-- [ ] 目标对齐度：内容级的对照（"你定的是学 Rust，今天 Rust 占注意力 12%，昨天 0%"）
-- [ ] 周报：讲趋势和目标的渐进调整，日报只讲今天的一个重点
-- [ ] 基线积累：baselines 表开始产生纵向趋势
+规划助手根据真实反馈给出继续、缩小、换输入或暂停建议。个人觉得有用不自动证明市场需求；商业验证需独立样本和问题定义。
 
-**验证点**：两周后你还会打开报告吗？打开后有没有一次真的改变了你接下来的行为。
+## 后续可选方向
 
-### v3 —— 感知扩展（远期，等端侧能力成熟）
+只有明确缺口才扩展：更多项目/对话来源、历史可比分析、用户确认目标、周回顾或新设备输入。音频和眼镜属于远期来源探索；一个 source 字段不代表跨领域理解已经完成。
 
-- [ ] 第二个数据源：音频转写（`source='audio'`）
-- [ ] 本地小模型做片段抽取，只有脱敏后的聚合才走云端
-- [ ] 视觉模型补 OCR 覆盖不了的场景（图表、视频、设计稿）
-- [ ] AI 眼镜 / 边缘设备感知接入（`source='glasses'`）
-
-**这条线的前提**：感知层会商品化，模型会商品化，而"关于你的纵向数据"和
-"如何改变你的 know-how"不会。v0~v2 攒的就是后两者。
-
-## 风险与对应
-
-| 风险 | 对应 |
-|------|------|
-| 报告两周后没人看 | v0 先用最粗摘要验证形态；只讲 delta、非评判、一屏 |
-| 隐私顾虑赶客 | 蒸馏即焚 + 本地 OCR + 原始数据不出设备；把隐私当卖点 |
-| 误标一次就失去信任 | v1 的纠错入口 + 置信度标注，宁可少说也不错判 |
-| 变成另一个截屏记忆工具 | 不提供"库"可逛；报告是唯一界面；名字和叙事都不说"记录" |
-| 大公司入局（Apple/Meta） | 拼纵向数据资产 + 干预 know-how + 非粘性商业模式，不拼感知硬件 |
-
-## 一句话
-
-> v0 用最低成本验证"一屏报告值不值得每天打开"；
-> 验证通过后，再把 AI 理解的深度、目标循环、感知扩展一层层加上去。
-> 截屏只是今天的传感器，真正的产品是"关于你的纵向数据"和"帮你掌舵的教练"。
+用户目标可能改变；观察偏好、明确目标、模型建议保持区分。任何行为干预都应先证明发现可靠且用户确实需要，不把“持续优化效率”设成默认人生目标。
